@@ -1,0 +1,11 @@
+bin
+release
+export
+data
+garmin_mount
+
+.directory
+.pydevproject
+
+*.fit
+*.sh

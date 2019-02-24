@@ -1,0 +1,10 @@
+<strings>
+	<string id="AppName">SlopeCounter</string>
+
+	<string id="slope_number_graph_title">Slope transitions</string>
+	<string id="slope_number_graph_data_label">Slope number</string>
+	<string id="slope_number_graph_units">#</string>
+
+	<string id="slope_count_data_label">Slope count</string>
+	<string id="slope_count_units">#</string>
+</strings>

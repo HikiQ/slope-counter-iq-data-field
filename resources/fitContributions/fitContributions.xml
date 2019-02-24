@@ -1,0 +1,12 @@
+<fitContributions>
+	<fitField id="0" displayInChart="true" sortOrder="0"
+		displayInActivitySummary="true" precision="0"
+		chartTitle="@Strings.slope_number_graph_title"
+		dataLabel="@Strings.slope_number_graph_data_label"
+		unitLabel="@Strings.slope_number_graph_units" fillColor="#0000FF" />
+
+	<fitField id="1" displayInChart="false" sortOrder="1"
+		displayInActivitySummary="true" precision="0"
+		dataLabel="@Strings.slope_count_data_label"
+		unitLabel="@Strings.slope_count_units" />
+</fitContributions>
