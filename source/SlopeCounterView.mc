@@ -84,7 +84,9 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     // THE VALUE to show to the user
     protected var number_of_slopes = 0;
 
-    // Set the label of the data field here.
+    /*
+    Initializes the data field and model. Loads settings and sets the field label.
+    */
     function initialize() {
         System.println("SlopeCounter::initialize");
         SimpleDataField.initialize();
@@ -129,6 +131,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         previous_alpha = start_probability.slice(null, null);
         previous_slope_end_time = new Time.Moment(0);
         current_state = FLAT;
+        uphill_encountered = true;
     }
 
     /*
@@ -148,7 +151,6 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
             FitContributor.DATA_TYPE_UINT32,
             {:mesgType=>FitContributor.MESG_TYPE_SESSION, :units=>"#"}
             );
-
     }
 
     // Timer functions ---------------->
