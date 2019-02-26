@@ -61,7 +61,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     protected var transition_probability = null; // init in load settings [[1-a, a, 0], [a/2.0, 1-a, a/2.0], [0, a, 1-a]];
 
     // emission probabilities for each observation given a state
-    protected var emission_probability = [[0.6, 0.2, 0.2], [0.2, 0.6, 0.2], [0.2, 0.2, 0.6]];
+    protected var emission_probability = [[0.6, 0.2, 0.2], [0.1, 0.8, 0.1], [0.2, 0.2, 0.6]];
 
     // the probability for the current state and previous state (forward algorithm)
     protected var alpha = null;
@@ -125,7 +125,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     Init HMM
     */
     protected function init_model() {
-        alpha = [0.5, 0.5, 0.5];
+        alpha = [0, 0, 0]; // alpha values are always overwritten inside the forward algorithm
         previous_alpha = start_probability.slice(null, null);
         previous_slope_end_time = new Time.Moment(0);
         current_state = FLAT;

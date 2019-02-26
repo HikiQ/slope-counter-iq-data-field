@@ -26,12 +26,11 @@ class SlopeCounterApp extends Application.AppBase {
     }
 
     // when settings are changes from connectIQ
-    // This crashes the simulator. TODO debug later
-    //function onSettingsChanged() {
-    //    System.println("SlopeCounterApp::onSettingsChanged");
-    //    var ui = getView();
-    //    ui.onSettingsChanged();
-    //}
+    function onSettingsChanged() {
+        System.println("SlopeCounterApp::onSettingsChanged");
+        var ui = getView();
+        ui.onSettingsChanged();
+    }
 
     // Return the initial view of your application here
     function getInitialView() {
