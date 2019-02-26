@@ -2,12 +2,12 @@
 
 	<setting propertyKey="@Properties.verticalSpeedThreshold"
 		title="@Strings.verticalSpeedThreshold">
-		<settingConfig type="numeric" min="0" />
+		<settingConfig type="numeric" min="0" max="10"/>
 	</setting>
 
 	<setting propertyKey="@Properties.minDelayForNewSlope"
 		title="@Strings.minDelayForNewSlope">
-		<settingConfig type="numeric" min="0" />
+		<settingConfig type="numeric" min="0" max="3600"/>
 	</setting>
 
 	<setting
