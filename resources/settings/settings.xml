@@ -1,0 +1,19 @@
+<settings>
+
+	<setting propertyKey="@Properties.verticalSpeedThreshold"
+		title="@Strings.verticalSpeedThreshold">
+		<settingConfig type="numeric" min="0" />
+	</setting>
+
+	<setting propertyKey="@Properties.minDelayForNewSlope"
+		title="@Strings.minDelayForNewSlope">
+		<settingConfig type="numeric" min="0" />
+	</setting>
+
+	<setting
+		propertyKey="@Properties.negativeLogTransitionProbability"
+		title="@Strings.negativeLogTransitionProbability">
+		<settingConfig type="numeric" min="1" max="10" />
+	</setting>
+
+</settings>

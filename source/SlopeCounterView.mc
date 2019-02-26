@@ -2,23 +2,25 @@ using Toybox.FitContributor;
 using Toybox.System;
 using Toybox.Time;
 using Toybox.WatchUi;
+using Toybox.Math;
 
 class SlopeCounterView extends WatchUi.SimpleDataField {
 
     // enums for states
     enum {
         DOWNHILL = 0,
+        FLAT,
         UPHILL,
         STATE_COUNT
     }
 
     // shown in UI for given state
-    var state_marker = ["v ", "^ "];
+    // cannot return strings var state_marker = ["v ", "^ "];
 
     // enums for moving direction (observations for the model)
     enum {
         DOWN = 0,
-        FLAT,
+        LEVEL,
         UP,
         OBSERVATION_COUNT
     }
@@ -40,23 +42,26 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     protected var previous_altitude = 0;
 
     // moving vertical speed limit (m/s)
-    protected var vertical_speed_limit = 0.5;
+    protected var vertical_speed_limit = null; // init in load settings  0.3;
+
+    // Slopes can only start when uphill is found between them
+    protected var uphill_encountered = null;
 
     // last slope end time to filter slopes starting too close to each other
     protected var previous_slope_end_time = null;
 
     // minimum time from last slopes end to start a new run
-    protected var minimum_time_from_last_slope_end = new Time.Duration(30);
+    protected var minimum_time_from_last_slope_end = null; // init in load settings new Time.Duration(30);
 
     // Hidden markov model (see states and observations) -->
-    protected var start_probability = [0.0, 1.0];
+    protected var start_probability = [0.0, 1.0, 0.0];
 
     // transition probabilities
-    protected var a = 0.0001;
-    protected var transition_probability = [[1-a, a], [a, 1-a]];
+    //protected var a = 0.0001;
+    protected var transition_probability = null; // init in load settings [[1-a, a, 0], [a/2.0, 1-a, a/2.0], [0, a, 1-a]];
 
     // emission probabilities for each observation given a state
-    protected var emission_probability = [[0.5, 0.3, 0.2], [0.2, 0.3, 0.5]];
+    protected var emission_probability = [[0.6, 0.2, 0.2], [0.2, 0.6, 0.2], [0.2, 0.2, 0.6]];
 
     // the probability for the current state and previous state (forward algorithm)
     protected var alpha = null;
@@ -81,20 +86,49 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
 
     // Set the label of the data field here.
     function initialize() {
+        System.println("SlopeCounter::initialize");
         SimpleDataField.initialize();
+        loadSettings();
+
         init_model();
         init_fit_contributor();
         label = "Runs";
     }
 
     /*
+    Called from the main app
+    */
+    function onSettingsChanged() {
+        loadSettings();
+    }
+
+    /**
+    All these settings can be changes on the fly.
+    */
+    protected function loadSettings() {
+        System.println("SlopeCounter::loadSettings");
+        var app = Application.getApp();
+
+        var vertical_speed_threshold = app.getProperty("verticalSpeedThreshold");
+        var min_delay_for_new_slope = app.getProperty("minDelayForNewSlope");
+        var negativeLogTransitionProbability = app.getProperty("negativeLogTransitionProbability");
+
+        vertical_speed_limit = vertical_speed_threshold;
+        //
+        minimum_time_from_last_slope_end = new Time.Duration(min_delay_for_new_slope);
+        //
+        var a = Math.pow(10, -negativeLogTransitionProbability);
+        transition_probability = [[1-a, a, 0], [a/2.0, 1-a, a/2.0], [0, a, 1-a]];
+    }
+
+    /*
     Init HMM
     */
-    function init_model() {
-        alpha = [0, 0];
+    protected function init_model() {
+        alpha = [0.5, 0.5, 0.5];
         previous_alpha = start_probability.slice(null, null);
         previous_slope_end_time = new Time.Moment(0);
-        current_state = UPHILL;
+        current_state = FLAT;
     }
 
     /*
@@ -121,6 +155,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     function onTimerStart() {
         warmup = true;
         warmup_iterations = filter_length-1;
+        uphill_encountered = true;
         is_running = true;
     }
 
@@ -131,6 +166,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     function onTimerResume() {
         warmup = true;
         warmup_iterations = filter_length-1;
+        uphill_encountered = true;
         is_running = true;
     }
 
@@ -163,14 +199,14 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
             return number_of_slopes;
         }
 
-        // calculate filtered speed and discretize it to DOWN, FLAT, UP)
+        // calculate filtered speed and discretize it to DOWN, LEVEL, UP)
         var vertical_speed = get_filtered_vertical_speed(info.altitude);
         var moving_direction = discretize_vertical_speed(vertical_speed);
 
         // updates current state and hmm fields
         forward_algorithm(moving_direction);
 
-        System.println(vertical_speed);
+        //System.println(vertical_speed);
         System.println(moving_direction);
 
         // update fit data
@@ -179,16 +215,16 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         // return the value to show
         //return Lang.format("$1$$2$", [state_marker[current_state], number_of_slopes]);
 
-        if (current_state == DOWNHILL) {
-            return number_of_slopes;
-        } else {
+        if (current_state == UPHILL) {
             return -number_of_slopes;
+        } else {
+            return number_of_slopes;
         }
     }
 
     /*
     Calculates the most probable state of the hidden markov model using a forward algorithm
-    observation : discretized observation (DOWN, FLAT, UP) to prevent spike effects
+    observation : discretized observation (DOWN, LEVEL, UP) to prevent spike effects
     */
     protected function forward_algorithm(observation) {
         var p_observation_given_state = 0;
@@ -235,16 +271,21 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
             var now = Time.now();
             var hysteresis = previous_slope_end_time.add(minimum_time_from_last_slope_end);
 
-            if (most_probable_state == DOWNHILL && now.greaterThan(hysteresis)) {
-                // current state is upphill and we are moving downhill (enough time has passed from the last change)
+            if (most_probable_state == DOWNHILL && uphill_encountered == true && now.greaterThan(hysteresis)) {
+                // current state is upphill and we are moving downhill state
+                // there was an uphill since last downhill
+                // and enough time has passed from the last change
                 number_of_slopes += 1;
+                uphill_encountered = false;
                 slope_count_field.setData(number_of_slopes);
 
             } else if (current_state == DOWNHILL) {
                 // current state is downhill and we are moving to some other state
                 previous_slope_end_time = now;
-            }
 
+            } else if (most_probable_state == UPHILL) {
+                uphill_encountered = true;
+            }
         }
 
         // always set current state to most probable state
@@ -255,6 +296,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     Wait untill we have n vertical speed estimates to fill the filter
     */
     protected function warmup_phase(altitude) {
+        System.println("SlopeCounter::warmup_phase");
         if (get_filtered_vertical_speed(altitude) != null) {
             warmup_iterations -= 1;
             if (warmup_iterations <= 0) {
@@ -279,7 +321,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
 
         // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
         altitude = median(filter_array, current_state == DOWNHILL);
-        System.println(filter_array);
+        //System.println(filter_array);
         System.println(altitude);
 
         // calculate the difference to the previous altitude
@@ -293,7 +335,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     }
 
     /**
-    Discretize the moving direction to DOWN, FLAT and UP based on the speed limit
+    Discretize the moving direction to DOWN, LEVEL and UP based on the speed limit
     */
     protected function discretize_vertical_speed(vertical_speed) {
         if (vertical_speed < -vertical_speed_limit) {
@@ -301,7 +343,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         } else if (vertical_speed > vertical_speed_limit) {
             return UP;
         } else {
-            return FLAT;
+            return LEVEL;
         }
     }
 
