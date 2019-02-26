@@ -1,8 +1,8 @@
 using Toybox.FitContributor;
+using Toybox.Math;
 using Toybox.System;
 using Toybox.Time;
 using Toybox.WatchUi;
-using Toybox.Math;
 
 class SlopeCounterView extends WatchUi.SimpleDataField {
 
@@ -135,7 +135,8 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     }
 
     /*
-    Write slope data to the fit file
+    Initialize the fit contributor data fields for writing
+    the slope data to a fit file
     */
     protected function init_fit_contributor() {
         slope_transition_graph_field = createField(
@@ -224,6 +225,65 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         }
     }
 
+
+    /*
+    Wait untill we have n vertical speed estimates to fill the filter
+    */
+    protected function warmup_phase(altitude) {
+        System.println("SlopeCounter::warmup_phase");
+        if (get_filtered_vertical_speed(altitude) != null) {
+            warmup_iterations -= 1;
+            if (warmup_iterations <= 0) {
+                warmup = false;
+            }
+        }
+    }
+
+
+    /*
+    Calculates the vertical speed from current and the previous altitude
+    altitude : altitude as found in the info struct
+    */
+    protected function get_filtered_vertical_speed(altitude) {
+        if (altitude == null) {
+            return null;
+        }
+
+        // add to the filter array
+        filter_array_idx += 1;
+        filter_array_idx %= filter_array.size();
+        filter_array[filter_array_idx] = altitude;
+
+        // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
+        altitude = median(filter_array, current_state == DOWNHILL);
+        //System.println(filter_array);
+        System.println(altitude);
+
+        // calculate the difference to the previous altitude
+        var altitude_delta = altitude - previous_altitude;
+
+        // update previous altitude
+        previous_altitude = altitude;
+
+        // value is in m/s
+        return altitude_delta;
+    }
+
+
+    /**
+    Discretize the moving direction to DOWN, LEVEL and UP based on the speed limit
+    */
+    protected function discretize_vertical_speed(vertical_speed) {
+        if (vertical_speed < -vertical_speed_limit) {
+            return DOWN;
+        } else if (vertical_speed > vertical_speed_limit) {
+            return UP;
+        } else {
+            return LEVEL;
+        }
+    }
+
+
     /*
     Calculates the most probable state of the hidden markov model using a forward algorithm
     observation : discretized observation (DOWN, LEVEL, UP) to prevent spike effects
@@ -294,60 +354,6 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         current_state = most_probable_state;
     }
 
-    /*
-    Wait untill we have n vertical speed estimates to fill the filter
-    */
-    protected function warmup_phase(altitude) {
-        System.println("SlopeCounter::warmup_phase");
-        if (get_filtered_vertical_speed(altitude) != null) {
-            warmup_iterations -= 1;
-            if (warmup_iterations <= 0) {
-                warmup = false;
-            }
-        }
-    }
 
-    /*
-    Calculates the vertical speed from current and the previous altitude
-    altitude : altitude as found in the info struct
-    */
-    protected function get_filtered_vertical_speed(altitude) {
-        if (altitude == null) {
-            return null;
-        }
-
-        // add to the filter array
-        filter_array_idx += 1;
-        filter_array_idx %= filter_array.size();
-        filter_array[filter_array_idx] = altitude;
-
-        // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
-        altitude = median(filter_array, current_state == DOWNHILL);
-        //System.println(filter_array);
-        System.println(altitude);
-
-        // calculate the difference to the previous altitude
-        var altitude_delta = altitude - previous_altitude;
-
-        // update previous altitude
-        previous_altitude = altitude;
-
-        // value is in m/s
-        return altitude_delta;
-    }
-
-    /**
-    Discretize the moving direction to DOWN, LEVEL and UP based on the speed limit
-    */
-    protected function discretize_vertical_speed(vertical_speed) {
-        if (vertical_speed < -vertical_speed_limit) {
-            return DOWN;
-        } else if (vertical_speed > vertical_speed_limit) {
-            return UP;
-        } else {
-            return LEVEL;
-        }
-    }
-
-}
+} // SlopeCounterView
 
