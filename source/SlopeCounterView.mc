@@ -25,6 +25,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         OBSERVATION_COUNT
     }
 
+    // set to true when timer is running, false on pause and stop
     protected var is_running = false;
 
     // warmup period to fill the filter
@@ -115,11 +116,17 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         var min_delay_for_new_slope = app.getProperty("minDelayForNewSlope");
         var negativeLogTransitionProbability = app.getProperty("negativeLogTransitionProbability");
 
-        vertical_speed_limit = vertical_speed_threshold;
+        vertical_speed_limit = (vertical_speed_threshold != null && vertical_speed_threshold.toFloat() >= 0.2) ?
+            vertical_speed_threshold.toFloat() : 0.2;
         //
-        minimum_time_from_last_slope_end = new Time.Duration(min_delay_for_new_slope);
+        minimum_time_from_last_slope_end = (min_delay_for_new_slope != null && min_delay_for_new_slope.toNumber() >= 0) ?
+            new Time.Duration(min_delay_for_new_slope.toNumber()) : new Time.Duration(30);
+
         //
-        var a = Math.pow(10, -negativeLogTransitionProbability);
+        var a = (negativeLogTransitionProbability != null && negativeLogTransitionProbability.toNumber() >= 1) ?
+            negativeLogTransitionProbability.toNumber() : 4;
+
+        a = Math.pow(10, -a);
         transition_probability = [[1-a, a, 0], [a/2.0, 1-a, a/2.0], [0, a, 1-a]];
     }
 
@@ -156,6 +163,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
 
     // Timer functions ---------------->
     function onTimerStart() {
+        System.println("SlopeCounter::onTimerStart");
         warmup = true;
         warmup_iterations = filter_length-1;
         uphill_encountered = true;
@@ -163,10 +171,12 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     }
 
     function onTimerPause() {
+        System.println("SlopeCounter::onTimerPause");
         is_running = false;
     }
 
     function onTimerResume() {
+        System.println("SlopeCounter::onTimerResume");
         warmup = true;
         warmup_iterations = filter_length-1;
         uphill_encountered = true;
@@ -174,11 +184,13 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     }
 
     function onTimerStop() {
+        System.println("SlopeCounter::onTimerStop");
         is_running = false;
         slope_count_field.setData(number_of_slopes);
     }
 
     function onTimerReset() {
+        System.println("SlopeCounter::onTimerReset");
         is_running = false;
         number_of_slopes = 0;
     }
@@ -210,7 +222,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         forward_algorithm(moving_direction);
 
         //System.println(vertical_speed);
-        System.println(moving_direction);
+        //System.println(moving_direction);
 
         // update fit data
         slope_transition_graph_field.setData(number_of_slopes);
@@ -257,7 +269,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
         altitude = median(filter_array, current_state == DOWNHILL);
         //System.println(filter_array);
-        System.println(altitude);
+        //System.println(altitude);
 
         // calculate the difference to the previous altitude
         var altitude_delta = altitude - previous_altitude;
