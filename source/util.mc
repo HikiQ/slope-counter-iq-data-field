@@ -1,6 +1,19 @@
 /*
+Calculates the mean of the array
+data : array of data
+*/
+function mean(data) {
+    var sum = 0.0;
+    for (var i = 0; i < data.size(); i++) {
+        sum += data[i];
+    }
+
+    return sum / data.size();
+}
+
+/*
 Calculates the median of an odd size array
-data : array to sort (copy is sorted to keep input untouched)
+data : array of data
 reverse : if the array should be reversed for better performance
 */
 function median(data, reverse) {
@@ -21,6 +34,32 @@ function median(data, reverse) {
     return data[data.size() / 2];
 }
 
+/*
+Calculates the truncated mean of the data
+data: array of data
+n_truncate : truncate this many values from min and max
+*/
+function truncated_mean(data, reverse, n_truncate) {
+    // copy the array to keep the sliding window in order
+    if (reverse) {
+        // if we are going downhill the smallest value is always at the right end
+        // reverse to get into better order
+        data = data.reverse();
+    } else {
+        // there might be a better way to make a copy
+        data = data.slice(null, null);
+    }
+
+    // sort the copy of the array
+    sort(data);
+
+    var sum = 0.0;
+    for (var i = n_truncate; i < data.size() - n_truncate; i++) {
+        sum += data[i];
+    }
+
+    return sum / (data.size() - 2*n_truncate);
+}
 
 /*
 Insertion sort from

@@ -33,14 +33,16 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     protected var warmup_iterations = null;
 
     // filter length
-    protected var filter_length = 3;
-    // this must be odd size or the median is calculated wrong
-    protected var filter_array = [0.0, 0.0, 0.0];
+    protected var filter_length = 5;
+    // truncation of the array when filtering with truncated mean
+    protected var filter_mean_truncation = 1;
+    // this must be odd size when a median filter is used. for truncated mean, can be anything
+    protected var filter_array = null;
     // filter array is used as a circular buffer
     protected var filter_array_idx = -1;
 
     // vertical speed calculation needs the previous altitude
-    protected var previous_altitude = 0;
+    protected var current_altitude = 0;
 
     // moving vertical speed limit (m/s)
     protected var vertical_speed_limit = null; // init in load settings  0.3;
@@ -51,8 +53,15 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     // last slope end time to filter slopes starting too close to each other
     protected var previous_slope_end_time = null;
 
+    // last slopes end altitude to compare if we have a really slow uphill between slopes
+    protected var previous_slope_end_altitude = null;
+
     // minimum time from last slopes end to start a new run
     protected var minimum_time_from_last_slope_end = null; // init in load settings new Time.Duration(30);
+
+    // minimum altitude difference between the end of the previous slope to the start of a new slope in meters
+    // used if we have moved really slowly uphill and no uphill is encountered because of the speed
+    protected var minimum_altitude_gain_from_slope_end = null; // init in load setting 100.0
 
     // Hidden markov model (see states and observations) -->
     protected var start_probability = [0.0, 1.0, 0.0];
@@ -92,10 +101,11 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         System.println("SlopeCounter::initialize");
         SimpleDataField.initialize();
         loadSettings();
+        label = "Runs";
 
+        init_altitude_filter();
         init_model();
         init_fit_contributor();
-        label = "Runs";
     }
 
     /*
@@ -114,6 +124,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
 
         var vertical_speed_threshold = app.getProperty("verticalSpeedThreshold");
         var min_delay_for_new_slope = app.getProperty("minDelayForNewSlope");
+        var min_altitude_gain_for_new_slope = app.getProperty("minAltitudeGainForNewSlope");
         var negativeLogTransitionProbability = app.getProperty("negativeLogTransitionProbability");
 
         vertical_speed_limit = (vertical_speed_threshold != null && vertical_speed_threshold.toFloat() >= 0.2) ?
@@ -121,7 +132,9 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         //
         minimum_time_from_last_slope_end = (min_delay_for_new_slope != null && min_delay_for_new_slope.toNumber() >= 0) ?
             new Time.Duration(min_delay_for_new_slope.toNumber()) : new Time.Duration(30);
-
+        //
+        minimum_altitude_gain_from_slope_end = (min_altitude_gain_for_new_slope != null && min_altitude_gain_for_new_slope.toFloat() >= 10) ?
+            min_altitude_gain_for_new_slope.toFloat() : 100.0;
         //
         var a = (negativeLogTransitionProbability != null && negativeLogTransitionProbability.toNumber() >= 1) ?
             negativeLogTransitionProbability.toNumber() : 4;
@@ -131,12 +144,28 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     }
 
     /*
+    Create filter array
+    */
+    protected function init_altitude_filter() {
+        filter_array = [];
+        for (var i = 0; i < filter_length; i++) {
+           filter_array.add(0.0);
+        }
+    }
+
+    /*
     Init HMM
     */
     protected function init_model() {
-        alpha = [0, 0, 0]; // alpha values are always overwritten inside the forward algorithm
+        // alpha values are always overwritten inside the forward algorithm
+        alpha = [];
+        for (var i = 0; i < STATE_COUNT; i++) {
+            alpha.add(0.0);
+        }
+
         previous_alpha = start_probability.slice(null, null);
         previous_slope_end_time = new Time.Moment(0);
+        previous_slope_end_altitude = 0;
         current_state = FLAT;
         uphill_encountered = true;
     }
@@ -218,11 +247,14 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         var vertical_speed = get_filtered_vertical_speed(info.altitude);
         var moving_direction = discretize_vertical_speed(vertical_speed);
 
-        // updates current state and hmm fields
-        forward_algorithm(moving_direction);
+        // runs the hidden markov model for this iteration. does not update current state yet
+        var previous_state = current_state;
+        var most_probable_state = forward_algorithm(moving_direction);
+        current_state = most_probable_state;
 
-        //System.println(vertical_speed);
-        //System.println(moving_direction);
+        // conditions for the minimum time between the last slope's end and a the proposed run
+        // and that there is uphill between slopes
+        check_if_slope_count_increases(previous_state, current_state);
 
         // update fit data
         slope_transition_graph_field.setData(number_of_slopes);
@@ -266,16 +298,25 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         filter_array_idx %= filter_array.size();
         filter_array[filter_array_idx] = altitude;
 
+        // use the mean of the altitude
+        // discretization removes spikes from derivative but large spikes stay in the filter array for the time of the filter's length
+        // altitude = mean(filter_array);
+
         // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
-        altitude = median(filter_array, current_state == DOWNHILL);
-        //System.println(filter_array);
-        //System.println(altitude);
+        // altitude = median(filter_array, current_state == DOWNHILL);
+
+        // use the truncated mean of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
+        altitude = truncated_mean(filter_array, current_state == DOWNHILL, filter_mean_truncation);
 
         // calculate the difference to the previous altitude
-        var altitude_delta = altitude - previous_altitude;
+        var altitude_delta = altitude - current_altitude;
 
         // update previous altitude
-        previous_altitude = altitude;
+        current_altitude = altitude;
+
+        //System.println(filter_array);
+        //System.println(altitude);
+        //System.println(altitude_delta);
 
         // value is in m/s
         return altitude_delta;
@@ -286,9 +327,9 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     Discretize the moving direction to DOWN, LEVEL and UP based on the speed limit
     */
     protected function discretize_vertical_speed(vertical_speed) {
-        if (vertical_speed < -vertical_speed_limit) {
+        if (vertical_speed <= -vertical_speed_limit) {
             return DOWN;
-        } else if (vertical_speed > vertical_speed_limit) {
+        } else if (vertical_speed >= vertical_speed_limit) {
             return UP;
         } else {
             return LEVEL;
@@ -339,31 +380,43 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
             }
         }
 
-        // do not completely trust the HMM but also check that enough time has passed since last transition to downhill
-        // for the number of runs calculation
-        if (most_probable_state != current_state) {
+        return most_probable_state;
+    }
+
+    /*
+    Do not completely trust the HMM but also check that enough time has passed since last transition to downhill
+    for the number of runs calculation and there is an uphill between the slopes
+
+    previous_state : the state we were in previous iteration
+    new_state : new state from HMM
+    */
+    protected function check_if_slope_count_increases(previous_state, new_state) {
+
+        // current state is still the previous state
+        if (new_state != previous_state) {
             var now = Time.now();
             var hysteresis = previous_slope_end_time.add(minimum_time_from_last_slope_end);
 
-            if (most_probable_state == DOWNHILL && uphill_encountered == true && now.greaterThan(hysteresis)) {
-                // current state is upphill and we are moving downhill state
-                // there was an uphill since last downhill
+            var enough_altitude_gain_from_last_slope_end = previous_slope_end_altitude + minimum_altitude_gain_from_slope_end < current_altitude;
+            var uphill_between_slopes = uphill_encountered || enough_altitude_gain_from_last_slope_end;
+
+            if (new_state == DOWNHILL && uphill_between_slopes && now.greaterThan(hysteresis)) {
+                // new state is downhill
+                // and there was an uphill since last downhill
                 // and enough time has passed from the last change
                 number_of_slopes += 1;
                 uphill_encountered = false;
                 slope_count_field.setData(number_of_slopes);
 
-            } else if (current_state == DOWNHILL) {
+            } else if (previous_state == DOWNHILL) {
                 // current state is downhill and we are moving to some other state
                 previous_slope_end_time = now;
+                previous_slope_end_altitude = current_altitude;
 
-            } else if (most_probable_state == UPHILL) {
+            } else if (new_state == UPHILL) {
                 uphill_encountered = true;
             }
         }
-
-        // always set current state to most probable state
-        current_state = most_probable_state;
     }
 
 

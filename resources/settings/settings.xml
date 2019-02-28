@@ -9,6 +9,11 @@
 		title="@Strings.minDelayForNewSlope">
 		<settingConfig type="numeric" min="0" max="3600"/>
 	</setting>
+	
+	<setting propertyKey="@Properties.minAltitudeGainForNewSlope"
+		title="@Strings.minAltitudeGainForNewSlope">
+		<settingConfig type="numeric" min="10" max="10000"/>
+	</setting>
 
 	<setting
 		propertyKey="@Properties.negativeLogTransitionProbability"

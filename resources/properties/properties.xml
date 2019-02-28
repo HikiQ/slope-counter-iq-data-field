@@ -1,5 +1,6 @@
 <properties>
 	<property id="verticalSpeedThreshold" type="float">0.3</property>
 	<property id="minDelayForNewSlope" type="number">30</property>
+	<property id="minAltitudeGainForNewSlope" type="number">100</property>
 	<property id="negativeLogTransitionProbability" type="number">4</property>
 </properties>
