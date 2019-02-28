@@ -11,5 +11,5 @@
 	<string id="verticalSpeedThreshold">Vertical speed threshold [m/s]</string>
 	<string id="minDelayForNewSlope">Minimum time between slopes [s]</string>
 	<string id="minAltitudeGainForNewSlope">SLOW ascent as uphill [m]</string>
-	<string id="negativeLogTransitionProbability">Filter [-log( P(state transition) )]</string>
+	<string id="negativeLogTransitionProbability">Up-down transition delay []</string>
 </strings>

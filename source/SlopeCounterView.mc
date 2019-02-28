@@ -35,7 +35,7 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
     // filter length
     protected var filter_length = 5;
     // truncation of the array when filtering with truncated mean
-    protected var filter_mean_truncation = 1;
+    protected var filter_mean_truncation = 0;
     // this must be odd size when a median filter is used. for truncated mean, can be anything
     protected var filter_array = null;
     // filter array is used as a circular buffer
@@ -299,14 +299,15 @@ class SlopeCounterView extends WatchUi.SimpleDataField {
         filter_array[filter_array_idx] = altitude;
 
         // use the mean of the altitude
-        // discretization removes spikes from derivative but large spikes stay in the filter array for the time of the filter's length
-        // altitude = mean(filter_array);
+        // discretization discards spikes from derivative
+        // but large spikes stay in the filter array for the time of the filter's length
+        altitude = mean(filter_array);
 
         // use the median of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
         // altitude = median(filter_array, current_state == DOWNHILL);
 
         // use the truncated mean of the altitude for speed estimate, reverse the arrays when going downhill for speedup in sorting
-        altitude = truncated_mean(filter_array, current_state == DOWNHILL, filter_mean_truncation);
+        //altitude = truncated_mean(filter_array, current_state == DOWNHILL, filter_mean_truncation);
 
         // calculate the difference to the previous altitude
         var altitude_delta = altitude - current_altitude;

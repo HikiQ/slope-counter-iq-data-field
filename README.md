@@ -23,7 +23,7 @@ Shows a negative number when going uphill.
     - If this value is too small, the number of slopes increases.
     - If this value is really large, only the ascent and descent speeds define hills (normal operation).
 
-- Filter [-log( P(state transition) )] :
+- Up-down transition delay :
     - Larger values make the transitions between uphill, flat and downhill slower
     - Reasonable starting values around 3-5
     - State transitions are modeled as a Hidden Markov model.
